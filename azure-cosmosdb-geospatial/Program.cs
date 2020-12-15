@@ -20,6 +20,7 @@ namespace azure_cosmosdb_geospatial
         private const int ConcurrentDocuments = 1;
 
         private static CosmosClient cosmosClient;
+        private static Container container;
 
         static async Task Main(string[] args)
         {
@@ -62,6 +63,9 @@ namespace azure_cosmosdb_geospatial
                 MaxRetryWaitTimeOnRateLimitedRequests = TimeSpan.FromHours(1),
             });
 
+            // Run query against Cosmos DB
+            container = cosmosClient.GetDatabase(DatabaseName).GetContainer(ContainerName);
+
             while (true)
             {
                 PrintPrompt();
@@ -76,11 +80,15 @@ namespace azure_cosmosdb_geospatial
                         await Polygon_Query();
                         break;
                     case ConsoleKey.D3:
+                        await Intersect_Query();
+                        break;
+                /*    case ConsoleKey.D4:
                         await Validate_Query();
                         break;
-                    case ConsoleKey.D4:
+                    case ConsoleKey.D5:
                         await ValidateDetailed_Query();
                         break;
+                */
                     case ConsoleKey.Escape:
                         Console.WriteLine("Exiting...");
                         return;
@@ -99,8 +107,9 @@ namespace azure_cosmosdb_geospatial
 
             Console.WriteLine("1 - Scenario 1: Perform a proximity query against spatial data");
             Console.WriteLine("2 - Scenario 2: Perform a query to check if a point lies within a Polygon");
-            Console.WriteLine("3 - Scenario 3: Perform a query to check if a spatial object is valid");
-            Console.WriteLine("4 - Scenario 4: Perform a query to validate a Polygon that is not closed");
+            Console.WriteLine("3 - Scenario 3: Perform a query to check if a there is an intersect");
+        //    Console.WriteLine("4 - Scenario 4: Perform a query to check if a spatial object is valid");
+        //    Console.WriteLine("5 - Scenario 5: Perform a query to validate a Polygon that is not closed");
 
             Console.WriteLine("--------------------------------------------------------------------- ");
             Console.WriteLine("");
@@ -110,23 +119,37 @@ namespace azure_cosmosdb_geospatial
 
         static async Task Proximity_Query()
         {
-            //Run query against container Nasa
-            var coordinates = "[[-155.814379,20.230111], [-155.814352,20.230218], [-155.814578,20.230268], [-155.814605,20.230161], [-155.814379,20.230111]]";
-            var sqlQueryText = "SELECT * FROM c " +
+            //Run query against container containing US building footprints
+            var coordinates = "[-105.27695, 39.93242]";
+            var sqlQueryText = "SELECT c.id FROM c " +
                                "WHERE ST_DISTANCE(c.geometry, {" +
-                                            "'type': 'Point', " + 
+                                            "'type': 'Point', " +
                                             "'coordinates':" + coordinates +
-                               "}) < 3000";
+                               "}) < 50";
+
 
             await RunQuery(sqlQueryText);
         }
 
         static async Task Polygon_Query()
         {
-            //Run query against container Nasa
-            var coordinates = "[[-155.814379,20.230111], [-155.814352,20.230218], [-155.814578,20.230268], [-155.814605,20.230161], [-155.814379,20.230111]]";
-            var sqlQueryText = "SELECT * FROM c " +
+            //Run query against container containing US building footprints
+            var coordinates = "[[-105.272114783872183, 39.935004540501282], [-105.281085361423948, 39.934951144206337], [-105.281039593171144, 39.931175263349083], [-105.272114783872183, 39.931282055938986],  [-105.272114783872183, 39.935004540501282]]";
+            var sqlQueryText = "SELECT c.id FROM c " +
                                "WHERE ST_WITHIN(c.geometry, {" +
+                                            "'type':'Polygon', " +
+                                            "'coordinates': [" + coordinates + "]" +
+                               "})";
+
+            await RunQuery(sqlQueryText);
+        }
+
+        static async Task Intersect_Query()
+        {
+            //Run query against container containing US building footprints
+            var coordinates = "[[-105.272114783872183, 39.935004540501282], [-105.281085361423948, 39.934951144206337], [-105.281039593171144, 39.931175263349083], [-105.272114783872183, 39.931282055938986],  [-105.272114783872183, 39.935004540501282]]";
+            var sqlQueryText = "SELECT c.id FROM c " +
+                               "WHERE ST_INTERSECTS(c.geometry, {" +
                                             "'type':'Polygon', " +
                                             "'coordinates': [" + coordinates + "]" +
                                "})";
@@ -136,7 +159,7 @@ namespace azure_cosmosdb_geospatial
 
         static async Task Validate_Query()
         {
-            //Run query against container Nasa
+            //Run query against container containing US building footprints
             var coordinates = "[118.99, 32.94667]";
             var sqlQueryText = "SELECT ST_ISVALID({ " + 
                                             "'type': 'Point', " + 
@@ -148,7 +171,7 @@ namespace azure_cosmosdb_geospatial
 
         static async Task ValidateDetailed_Query()
         {
-            //Run query against container Nasa
+            //Run query against container containing US building footprints
             var coordinates = "[[118.99, 32.94667], [32, -5], [32, -4.7], [31.8, -4.7], [117, 32.94667]]";
             var sqlQueryText = "SELECT ST_ISVALIDDETAILED({ " + 
                                             "'type': 'Polygon', " +
@@ -159,39 +182,24 @@ namespace azure_cosmosdb_geospatial
         }
 
         //Helper method to run query
-        static async Task RunQuery(string sqlQueryText, int maxItemCountPerPage = 100, int maxConcurrency = -1, bool useQueryOptions = false)
+        static async Task RunQuery(string sqlQueryText, int maxItemCountPerPage = 100, int maxConcurrency = -1)
         {
             Console.BackgroundColor = ConsoleColor.Blue;
 
             Console.WriteLine($"Running query: \"{sqlQueryText}\" against container {ContainerName}\n");
             Console.WriteLine("");
 
-            if (useQueryOptions)
-            {
-                Console.WriteLine($"Using MaxConcurrency: {maxConcurrency}");
-                Console.WriteLine($"Using MaxItemCountPerPage: {maxItemCountPerPage}");
-            }
             Console.ResetColor();
 
             double totalRequestCharge = 0;
             QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
 
-            // Run query against Cosmos DB
-            var container = cosmosClient.GetDatabase(DatabaseName).GetContainer(ContainerName);
-
             QueryRequestOptions requestOptions;
-            if (useQueryOptions)
+            requestOptions = new QueryRequestOptions()
             {
-                requestOptions = new QueryRequestOptions()
-                {
-                    MaxItemCount = maxItemCountPerPage,
-                    MaxConcurrency = maxConcurrency,
-                };
-            }
-            else
-            {
-                requestOptions = new QueryRequestOptions(); //use all default query options
-            }
+                MaxItemCount = maxItemCountPerPage,
+                MaxConcurrency = maxConcurrency,
+            };
 
             // Time the query
             Stopwatch stopWatch = new Stopwatch();
@@ -204,30 +212,30 @@ namespace azure_cosmosdb_geospatial
             {
                 FeedResponse<dynamic> currentResultSet = await queryResultSetIterator.ReadNextAsync();
                 totalRequestCharge += currentResultSet.RequestCharge;
-                //Console.WriteLine("another page");
+
                 foreach (var item in currentResultSet)
                 {
                     reviews.Add(item);
-                    Console.WriteLine(item);
+                    //Console.WriteLine(item);
                 }
-                if (useQueryOptions)
-                {
-                    Console.WriteLine($"Result count: {reviews.Count}");
-                }
-
+                //if (useQueryOptions)
+                //{
+                //    Console.WriteLine($"Result count: {reviews.Count}");
+                //}
             }
+            Console.WriteLine($"Result count: {reviews.Count}");
 
             stopWatch.Stop();
             TimeSpan ts = stopWatch.Elapsed;
 
             //Print results
-            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+            string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:000}",
                 ts.Hours, ts.Minutes, ts.Seconds,
-                ts.Milliseconds / 10);
+                ts.Milliseconds);
 
             Console.ForegroundColor = ConsoleColor.Green;
 
-            Console.WriteLine($"\tQuery returned {reviews.Count} results");
+            //Console.WriteLine($"\tQuery returned {reviews.Count} results");
             Console.WriteLine($"\tTotal time: {elapsedTime}");
             Console.WriteLine($"\tTotal Request Units consumed: {totalRequestCharge}\n");
             Console.WriteLine("\n\n\n");
