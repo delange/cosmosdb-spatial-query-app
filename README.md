@@ -6,7 +6,7 @@ Geospatial performance tests can be done with the c# application. It can be conn
 
 Within the app, three tests can be called, see the following example:
 Note that three performance tests are implemented and are :
-- described in blog post: 
+- described in: [blog post](https://towardsdatascience.com/geospatial-big-data-performance-tests-with-cosmos-db-and-data-enrichment-with-azure-synapse-257db7d29e4) 
 - implemented at: [repository](https://github.com/delange/cosmosdb-spatial-query-perf.git)
 
 <img src="./performance_app.jpg" width=1000px />
