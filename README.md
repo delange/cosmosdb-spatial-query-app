@@ -9,4 +9,4 @@ Note that three performance tests are implemented and are :
 - described in blog post: 
 - implemented at: [repository](https://github.com/delange/cosmosdb-spatial-query-perf.git)
 
-<img src="./img/performance_app.jpg" width=1000px />
+<img src="./performance_app.jpg" width=1000px />
